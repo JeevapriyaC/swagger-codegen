@@ -15,6 +15,7 @@ import com.squareup.okhttp.Headers;
 import com.squareup.okhttp.internal.http.HttpMethod;
 import com.squareup.okhttp.logging.HttpLoggingInterceptor;
 import com.squareup.okhttp.logging.HttpLoggingInterceptor.Level;
+import com.squareup.okhttp.logging.HttpLoggingInterceptor.Logger;
 
 import java.lang.reflect.Type;
 
@@ -121,6 +122,7 @@ public class ApiClient {
     private JSON json;
 
     private HttpLoggingInterceptor loggingInterceptor;
+    private String logFilePath;
 
     /*
      * Constructor for ApiClient
@@ -164,6 +166,16 @@ public class ApiClient {
      */
     public String getBasePath() {
         return basePath;
+    }
+    
+    /**
+     * Set log file path
+     *
+     * @return ApiClient
+     */
+    public ApiClient setLogFilePath(String logFilePath){
+    	this.logFilePath = logFilePath;
+    	return this;
     }
 
     /**
@@ -545,6 +557,103 @@ public class ApiClient {
      */
     public boolean isDebugging() {
         return debugging;
+    }
+    
+    /**
+     * Set Logger to write log data
+     *
+     * @return Logger
+     */
+    public Logger setLogger()    
+    {  
+        //final String result = null;  
+        Logger dataLogger = new Logger() {
+            
+            @Override
+            public void log(String message) {
+                String result = null;
+                try {
+                    //result = mask(message);
+                    result = prepareMasking(message);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                LogToFile(result);
+//              LogToFile(message);
+            }
+        };
+        
+        return dataLogger;
+    }
+
+    // data masking changes 
+    private static String prepareMasking(String json){
+        
+        String[] list = {"email", "cardNumber", "expirationDate", "cardType"};
+        try{
+            JsonElement object = new JsonParser().parse(json);
+            getChild(object, list);
+            return object.toString();
+        }catch(JsonSyntaxException e){
+            return json;
+        }
+        
+    }
+    
+    private static void mask(JsonObject obj, String[] list){
+        
+        for (String current : list) {
+            // removing mask field
+            /*if(obj.has(current)){
+                obj.remove(current);
+            }*/
+            //masking field
+            if(obj.has(current)){
+                obj.add(current, mask);
+            }
+        }
+    }
+    
+    public static void getChild(JsonElement json, String[] list){
+
+        if(json.isJsonObject()){
+            JsonObject obj = (JsonObject)json;
+            mask(obj, list);
+            for(Entry<String, JsonElement> entry : obj.entrySet()){
+                getChild(entry.getValue(), list);
+            }
+            
+        } else if(json.isJsonArray()){
+            JsonArray arr = ((JsonArray)json);
+            for(JsonElement obj: arr){
+                getChild(obj, list);
+            }
+        } 
+    }
+        
+    /**
+     * Log data to file
+     */
+    public void LogToFile(String logData)    
+    {    	
+    	java.util.logging.Logger logTest = java.util.logging.Logger.getLogger("RestAnetLogging");
+    	logTest.setUseParentHandlers(false);
+    	FileHandler fileHandler = null;
+    	
+    	try {
+    		
+    		fileHandler = new FileHandler(this.logFilePath, true);    	
+			logTest.addHandler(fileHandler);	
+			SimpleFormatter formatter = new SimpleFormatter();
+			fileHandler.setFormatter(formatter);
+			logTest.info(logData);
+			fileHandler.close();
+			
+		} catch (SecurityException e) {			
+			logTest.info(e.toString());
+		} catch (IOException e) {			
+			logTest.info(e.toString());
+		}
     }
 
     /**
